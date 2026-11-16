@@ -7,7 +7,10 @@ authors = [
     { name = "AI-projects-coder", email = "manikantakondapalli9498@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "google-cloud-storage>=3.17.1",
+    "python-dotenv>=1.2.4",
+]
 
 [project.scripts]
 shoppilot = "shoppilot:main"
