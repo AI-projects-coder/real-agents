@@ -1,0 +1,9 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "$_IMAGE", "."]
+
+# pushed to Artifact Registry after the steps succeed
+images: ["$_IMAGE"]
+
+options:
+  logging: CLOUD_LOGGING_ONLY   # required when using a custom build service account

@@ -34,3 +34,12 @@ Why commit .terraform.lock.hcl but never .tfstate?
 8. Admin Activity vs Data Access audit logs: which is always on, and which costs money?
 9. Why should only the CI pipeline run terraform apply on production?
 10. Locking protects the state, not resources. What exactly goes wrong without it?
+
+
+
+
+module 3:
+
+Why did Cloud Build use the default compute service account, and why is relying on it a security risk?
+What's the minimum set of permissions a build service account needs, and why grant artifactregistry.writer on the repo instead of the project?
+
