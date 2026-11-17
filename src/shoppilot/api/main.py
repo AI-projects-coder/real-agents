@@ -60,7 +60,8 @@ def require_api_key(
 # NOTE: not "/healthz" - Cloud Run reserves some paths ending in "z"!
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": "v2"}
+
 
 
 # Plain `def` (not async): the GCS SDK is blocking, so FastAPI runs it in a thread pool.
