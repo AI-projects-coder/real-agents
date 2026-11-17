@@ -60,7 +60,7 @@ def require_api_key(
 # NOTE: not "/healthz" - Cloud Run reserves some paths ending in "z"!
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "v2"}
+    return {"status": "ok", "version": "v3"}
 
 
 
