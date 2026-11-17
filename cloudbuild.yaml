@@ -10,7 +10,7 @@ options:
 steps:
   # 1. Run unit tests. If they fail, the pipeline stops here.
   - id: test
-    name: ghcr.io/astral-sh/uv:0.12.1-python3.12-bookworm-slim
+    name: ghcr.io/astral-sh/uv:0.12.1-python3.12-trixie-slim
     entrypoint: sh
     args: ["-c", "uv sync --frozen && uv run pytest -q"]
 
