@@ -1,9 +1,54 @@
-steps:
-  - name: gcr.io/cloud-builders/docker
-    args: ["build", "-t", "$_IMAGE", "."]
-
-# pushed to Artifact Registry after the steps succeed
-images: ["$_IMAGE"]
+# CI/CD pipeline: test -> build -> push -> deploy (no traffic) -> smoke test
+substitutions:
+  _REGION: us-central1
+  _SERVICE: shoppilot-api
+  _REPO: shoppilot
 
 options:
-  logging: CLOUD_LOGGING_ONLY   # required when using a custom build service account
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  # 1. Run unit tests. If they fail, the pipeline stops here.
+  - id: test
+    name: ghcr.io/astral-sh/uv:0.12.1-python3.12-bookworm-slim
+    entrypoint: sh
+    args: ["-c", "uv sync --frozen && uv run pytest -q"]
+
+  # 2. Build the image, tagged with the exact commit SHA.
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA
+      - .
+
+  # 3. Push it (needed before deploy can use it).
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA"]
+
+  # 4. Deploy a new revision with NO traffic, reachable via a private tag URL.
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA
+      - --region=${_REGION}
+      - --no-traffic
+      - --tag=sha-$SHORT_SHA
+
+  # 5. Smoke test the new revision through its tag URL before any user sees it.
+  - id: smoke-test
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        URL=$(gcloud run services describe ${_SERVICE} --region=${_REGION} \
+          --format="value(status.traffic[].url)" | tr ';' '\n' | grep "sha-$SHORT_SHA")
+        echo "Smoke testing $$URL"
+        curl -sf "$$URL/health" || (echo "SMOKE TEST FAILED" && exit 1)

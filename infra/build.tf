@@ -25,3 +25,18 @@ resource "google_storage_bucket_iam_member" "build_reads_source" {
   role   = "roles/storage.objectViewer"
   member = google_service_account.build.member
 }
+
+
+# Deploy Cloud Run revisions and shift traffic
+resource "google_project_iam_member" "build_deploys_run" {
+  project = var.project_id
+  role    = "roles/run.developer"
+  member  = google_service_account.build.member
+}
+
+# Allowed to deploy services that run AS shoppilot-dev (and only that SA)
+resource "google_service_account_iam_member" "build_acts_as_app" {
+  service_account_id = data.google_service_account.app.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = google_service_account.build.member
+}
