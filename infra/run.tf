@@ -5,6 +5,7 @@ resource "google_project_service" "apis" {
     "artifactregistry.googleapis.com",
     "secretmanager.googleapis.com",
     "cloudbuild.googleapis.com",
+    "pubsub.googleapis.com",
   ])
   service            = each.value
   disable_on_destroy = false
