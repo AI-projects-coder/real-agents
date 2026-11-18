@@ -37,9 +37,47 @@ Why commit .terraform.lock.hcl but never .tfstate?
 
 
 
+1. Why did Cloud Build use the default compute service account, and why is relying on it a security risk?
+2. What's the minimum set of permissions a build service account needs, and why grant artifactregistry.writer on the repo instead of the project?
 
-module 3:
+module 2:
 
-Why did Cloud Build use the default compute service account, and why is relying on it a security risk?
-What's the minimum set of permissions a build service account needs, and why grant artifactregistry.writer on the repo instead of the project?
+📝 Module 2 follow-up questions (2A + 2B)
+Containers and Cloud Run
+
+1. What are the 5 rules of Cloud Run's container contract, and what breaks if you ignore each one?
+2. Why is the Dockerfile split into "dependencies first, code second"? What happens to build time if you reverse it?
+Why run as a non-root user, and why exec in the CMD?
+3. Concurrency = 80 and max-instances = 2. What's the maximum number of simultaneous requests? What happens to request 161?
+Cold start: what causes it, how does min-instances=1 fix it, and what does that cost?
+4. Why does the GCS client get created in lifespan and not inside each request handler?
+5. Why are the endpoints plain def instead of async def here? When would async def be wrong?
+6. Your container crashed locally without credentials but works on Cloud Run with no key file. Explain why.
+
+Secrets and auth
+
+1. Why must secret values never go into Terraform, and how did we avoid that?
+You rotated the API key and the new key didn't work. Why, and how do you fix it in production without downtime?
+2. Cloud Run IAM auth (--no-allow-unauthenticated) vs app-level API key: when do you use each?
+3. Why does api_key have no default value in Settings? What is "fail fast"?
+
+Build and CI/CD
+
+1. docker buildx vs gcloud builds submit: what's the same and what's different?
+2. Why did Cloud Build fall back to the default compute service account, and why is that risky?
+3. Why does the build SA need iam.serviceAccountUser on shoppilot-dev? What attack does scoping it to one SA prevent?
+Why tag images with the commit SHA instead of :latest?
+4. Why do unit tests mock GCS instead of calling the real bucket?
+5. What does --no-traffic plus --tag give you, and why smoke test before shifting traffic?
+6. Canary vs blue/green vs all-at-once: when would you choose each?
+7. Rollback took seconds. Why? And what's the "pinned revision" gotcha afterwards?
+
+Debugging lessons from this module
+
+1. localhost:8080 returned Streamlit HTML. What was the root cause, and which two commands find it fast?
+2. Docker failed with input/output error. What was the real cause, and why do teams avoid building release images on laptops?
+
+
+Module 3:
+
 
