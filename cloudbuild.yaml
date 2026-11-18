@@ -52,3 +52,14 @@ steps:
           --format="value(status.traffic[].url)" | tr ';' '\n' | grep "sha-$SHORT_SHA")
         echo "Smoke testing $$URL"
         curl -sf "$$URL/health" || (echo "SMOKE TEST FAILED" && exit 1)
+    # 6. Worker: update the image only (config is owned by Terraform). Direct rollout - internal service.
+  - id: deploy-worker
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - shoppilot-worker
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA
+      - --region=${_REGION}
+
