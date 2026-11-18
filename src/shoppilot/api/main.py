@@ -1,7 +1,7 @@
 """ShopPilot API (Module 2)."""
+import datetime as dt
 import json
 import secrets
-import sys
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -9,24 +9,27 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from google.api_core.exceptions import NotFound
-from google.cloud import storage
+from google.cloud import firestore, pubsub_v1, storage
+from pydantic import BaseModel, Field
 
 from shoppilot.config import Settings, get_settings
+from shoppilot.logs import log
 
-
-def log(severity: str, message: str, **fields) -> None:
-    """One JSON object per line. Cloud Logging reads 'severity' and 'message' automatically."""
-    print(json.dumps({"severity": severity, "message": message, **fields}), file=sys.stdout, flush=True)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
-    # Create the GCS client ONCE per instance (not per request) -> connection reuse, lower latency.
+    if not settings.api_key:
+        raise RuntimeError("API_KEY is required")  # fail fast, same as before
+    # All clients created ONCE per instance
     app.state.gcs = storage.Client(project=settings.project_id)
+    app.state.publisher = pubsub_v1.PublisherClient()
+    app.state.topic = app.state.publisher.topic_path(settings.project_id, "ticket-events")
+    app.state.db = firestore.Client(project=settings.project_id)
     log("INFO", "startup", env=settings.env, bucket=settings.bucket)
     yield
-    log("INFO", "shutdown")  # runs on SIGTERM -> graceful shutdown
+    log("INFO", "shutdown")
 
 
 app = FastAPI(title="ShopPilot API", lifespan=lifespan)
@@ -78,3 +81,39 @@ def get_policy(name: str, request: Request, settings: Settings = Depends(get_set
         return blob.download_as_text()
     except NotFound:
         raise HTTPException(status_code=404, detail=f"policy '{name}' not found")
+
+class TicketIn(BaseModel):
+    """Request body. Pydantic validates it -> bad input gets 422 automatically."""
+    customer_id: str = Field(min_length=1, max_length=50)
+    subject: str = Field(min_length=3, max_length=200)
+    body: str = Field(min_length=3, max_length=5000)
+
+
+@app.post("/tickets", status_code=202, dependencies=[Depends(require_api_key)])
+def create_ticket(ticket: TicketIn, request: Request):
+    """Accept the ticket, publish an event, return immediately. Workers do the rest."""
+    event = {
+        "event_id": str(uuid.uuid4()),
+        "ticket_id": f"T-{uuid.uuid4().hex[:8]}",
+        **ticket.model_dump(),
+        "created_at": dt.datetime.now(dt.UTC).isoformat(),
+    }
+    future = request.app.state.publisher.publish(
+        request.app.state.topic,
+        json.dumps(event).encode(),
+        event_type="ticket.created",
+        schema_version="1",
+    )
+    message_id = future.result(timeout=10)  # wait until Pub/Sub has durably stored it
+    log("INFO", "ticket published", ticket_id=event["ticket_id"], message_id=message_id)
+    # 202 Accepted = "received, processing later" (not 201 Created: it isn't done yet)
+    return {"ticket_id": event["ticket_id"], "status": "received"}
+
+
+@app.get("/tickets/{ticket_id}", dependencies=[Depends(require_api_key)])
+def get_ticket(ticket_id: str, request: Request):
+    snap = request.app.state.db.collection("tickets").document(ticket_id).get()
+    if not snap.exists:
+        # Simplification: unknown IDs also look "processing". The outbox pattern fixes this.
+        return {"ticket_id": ticket_id, "status": "processing"}
+    return snap.to_dict()

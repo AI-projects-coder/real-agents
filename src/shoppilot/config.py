@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     project_id: str
-    api_key: str  # NO default on purpose: if the secret is missing, crash at startup (fail fast)
+    api_key: str = ""  # NO default on purpose: if the secret is missing, crash at startup (fail fast)
     env: str = "local"
     policies_bucket: str = ""
 
