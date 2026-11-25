@@ -58,3 +58,79 @@ resource "google_service_account_iam_member" "build_acts_as_ingest" {
   role               = "roles/iam.serviceAccountUser"
   member             = google_service_account.build.member
 }
+
+# ---------- The Job ----------
+resource "google_cloud_run_v2_job" "ingest" {
+  name                = "shoppilot-ingest"
+  location            = var.region
+  deletion_protection = false
+  labels              = local.common_labels
+
+  template {
+    task_count = 1
+    template {
+      service_account = google_service_account.ingest.email
+      max_retries     = 2      # transient failures retried per task
+      timeout         = "600s" # per task attempt
+
+      containers {
+        image   = var.worker_image # same image, third entrypoint
+        command = ["python"]
+        args    = ["-m", "shoppilot.ingest.job"]
+        env {
+          name  = "PROJECT_ID"
+          value = var.project_id
+        }
+        resources {
+          limits = {
+            cpu    = "1"
+            memory = "1Gi"
+          }
+        }
+      }
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [template[0].template[0].containers[0].image, client, client_version]
+  }
+}
+
+# The worker (dispatcher) may run THIS job with env overrides, and nothing else
+resource "google_cloud_run_v2_job_iam_member" "worker_runs_ingest" {
+  name     = google_cloud_run_v2_job.ingest.name
+  location = google_cloud_run_v2_job.ingest.location
+  role     = "roles/run.jobsExecutorWithOverrides"
+  member   = google_service_account.worker.member
+}
+
+# ---------- The Eventarc trigger ----------
+resource "google_eventarc_trigger" "uploads" {
+  name            = "uploads-finalized"
+  location        = var.region # must match the bucket's region
+  service_account = google_service_account.eventarc.email
+  labels          = local.common_labels
+
+  matching_criteria {
+    attribute = "type"
+    value     = "google.cloud.storage.object.v1.finalized"
+  }
+  matching_criteria {
+    attribute = "bucket"
+    value     = google_storage_bucket.uploads.name
+  }
+
+  destination {
+    cloud_run_service {
+      service = google_cloud_run_v2_service.worker.name
+      region  = var.region
+      path    = "/events/upload"
+    }
+  }
+
+  depends_on = [
+    google_project_iam_member.gcs_agent_pubsub,
+    google_project_iam_member.eventarc_receiver,
+    google_cloud_run_v2_service_iam_member.eventarc_invokes_worker,
+  ]
+}

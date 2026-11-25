@@ -62,4 +62,16 @@ steps:
       - shoppilot-worker
       - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA
       - --region=${_REGION}
+    # 7. Ingest job: update the image only (config owned by Terraform)
+  - id: update-ingest-job
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - update
+      - shoppilot-ingest
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA
+      - --region=${_REGION}
+
 
