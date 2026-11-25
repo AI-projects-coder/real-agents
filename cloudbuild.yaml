@@ -73,5 +73,16 @@ steps:
       - shoppilot-ingest
       - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA
       - --region=${_REGION}
+  # 8. Backfill job: update the image only
+  - id: update-backfill-job
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - update
+      - shoppilot-backfill
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/api:$SHORT_SHA
+      - --region=${_REGION}
 
 

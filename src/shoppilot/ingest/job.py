@@ -1,7 +1,5 @@
-"""Cloud Run Job: ingest ONE uploaded document (Module 4A).
+"""Ingest ONE document. Used by the single-file job (4A) and the backfill job (4B).
 
-Input via env vars (set per execution by the dispatcher):
-  SOURCE_BUCKET, SOURCE_OBJECT, SOURCE_GENERATION
 Exit 0 = success OR permanent failure (recorded). Crash = transient -> the job retries the task.
 """
 import datetime as dt
@@ -22,45 +20,41 @@ def doc_id_for(bucket: str, name: str, generation: str) -> str:
     return hashlib.sha256(f"{bucket}/{name}#{generation}".encode()).hexdigest()[:24]
 
 
-def main() -> int:
-    project = os.environ["PROJECT_ID"]
-    bucket_name = os.environ["SOURCE_BUCKET"]
-    object_name = os.environ["SOURCE_OBJECT"]
-    generation = os.environ.get("SOURCE_GENERATION", "")
-    out_bucket = os.environ.get("OUTPUT_BUCKET", f"{project}-policies")
-    attempt = int(os.environ.get("CLOUD_RUN_TASK_ATTEMPT", "0"))  # set by Cloud Run Jobs
-
-    gcs = storage.Client(project=project)
-    db = firestore.Client(project=project)
-
+def ingest_one(
+    gcs: storage.Client,
+    db: firestore.Client,
+    bucket_name: str,
+    object_name: str,
+    generation: str,
+    out_bucket: str | None = None,
+    attempt: int = 0,
+) -> str:
+    """Returns "done" | "skipped" | "failed". Raises on transient errors."""
+    out_bucket = out_bucket or f"{gcs.project}-policies"
     source = f"gs://{bucket_name}/{object_name}"
     doc_id = doc_id_for(bucket_name, object_name, generation)
     ref = db.collection("documents").document(doc_id)
     now = dt.datetime.now(dt.UTC)
 
-    # 1. Idempotency: duplicate event or re-run -> skip
     snap = ref.get()
     if snap.exists and snap.get("status") == "done":
         log("INFO", "already ingested, skipping", doc_id=doc_id, source=source)
-        return 0
+        return "skipped"
 
     ref.set({"source": source, "generation": generation, "status": "processing",
              "attempt": attempt, "updated_at": now}, merge=True)
 
-    # 2. Download the EXACT version that triggered us (not whatever is there now)
     blob = gcs.bucket(bucket_name).blob(object_name, generation=int(generation) if generation else None)
-    data = blob.download_as_bytes()  # network/permission errors crash -> task retry (transient)
+    data = blob.download_as_bytes()
 
-    # 3. Extract + chunk. ValueError = permanent: record it, exit 0, no retries.
     try:
         text = extract_text(data, object_name)
     except ValueError as e:
         ref.set({"status": "failed", "error": str(e), "updated_at": now}, merge=True)
         log("ERROR", "permanent ingest failure", doc_id=doc_id, source=source, error=str(e))
-        return 0
+        return "failed"
     chunks = chunk_text(text)
 
-    # 4. Write chunks as JSON Lines (one chunk per line). Deterministic path = idempotent.
     out_name = f"chunks/{doc_id}.jsonl"
     lines = [
         json.dumps({"doc_id": doc_id, "chunk_index": i, "source": source, "text": chunk})
@@ -70,10 +64,23 @@ def main() -> int:
         "\n".join(lines), content_type="application/jsonl"
     )
 
-    # 5. Mark done
     ref.set({"status": "done", "chunks": len(chunks), "chars": len(text),
              "output": f"gs://{out_bucket}/{out_name}", "updated_at": now}, merge=True)
     log("INFO", "ingested", doc_id=doc_id, source=source, chunks=len(chunks), attempt=attempt)
+    return "done"
+
+
+def main() -> int:
+    project = os.environ["PROJECT_ID"]
+    ingest_one(
+        storage.Client(project=project),
+        firestore.Client(project=project),
+        os.environ["SOURCE_BUCKET"],
+        os.environ["SOURCE_OBJECT"],
+        os.environ.get("SOURCE_GENERATION", ""),
+        out_bucket=os.environ.get("OUTPUT_BUCKET"),
+        attempt=int(os.environ.get("CLOUD_RUN_TASK_ATTEMPT", "0")),
+    )
     return 0
 
 
