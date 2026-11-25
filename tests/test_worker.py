@@ -8,10 +8,13 @@ from fastapi.testclient import TestClient
 from shoppilot.worker import main as worker
 
 
+
 @pytest.fixture
 def wclient(monkeypatch):
     monkeypatch.setenv("PROJECT_ID", "test-project")
     monkeypatch.setattr(worker.firestore, "Client", MagicMock())
+    monkeypatch.setattr(worker.run_v2, "JobsClient", MagicMock())
+
     with TestClient(worker.app) as c:
         yield c
 
@@ -35,3 +38,14 @@ def test_duplicate_is_acked_without_work(wclient):
     r = wclient.post("/pubsub/tickets", json=envelope(json.dumps(ticket).encode()))
     assert r.status_code == 200
     assert r.json() == {"status": "duplicate"}
+
+def test_upload_outside_policies_is_ignored(wclient):
+    r = wclient.post("/events/upload", json={"bucket": "b", "name": "images/cat.png", "size": "10", "generation": "1"})
+    assert r.json() == {"status": "ignored"}
+    wclient.app.state.jobs.run_job.assert_not_called()
+
+
+def test_policy_upload_starts_job(wclient):
+    r = wclient.post("/events/upload", json={"bucket": "b", "name": "policies/returns.md", "size": "100", "generation": "7"})
+    assert r.json() == {"status": "started"}
+    wclient.app.state.jobs.run_job.assert_called_once()

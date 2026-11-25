@@ -7,6 +7,8 @@ resource "google_project_service" "apis" {
     "cloudbuild.googleapis.com",
     "pubsub.googleapis.com",
     "firestore.googleapis.com",
+    "eventarc.googleapis.com",
+
   ])
   service            = each.value
   disable_on_destroy = false
