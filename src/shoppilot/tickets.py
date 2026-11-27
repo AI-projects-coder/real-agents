@@ -51,7 +51,8 @@ def classify_llm(ticket: dict) -> tuple[TicketClassification, types.GenerateCont
             temperature=0,  # classification should be repeatable
             response_mime_type="application/json",
             response_schema=TicketClassification,
-            thinking_config=types.ThinkingConfig(thinking_budget=0),  # simple task: no thinking = cheaper + faster
+            thinking_config=types.ThinkingConfig(thinking_level="low"),  # simple task: minimal thinking
+
         ),
     )
     if r.parsed is None:
