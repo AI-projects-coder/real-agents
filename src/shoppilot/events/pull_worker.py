@@ -12,6 +12,7 @@ import time
 from google.cloud import pubsub_v1
 
 from shoppilot.config import get_settings
+from shoppilot.tickets import classify_rules as classify
 
 SUBSCRIPTION = os.getenv("SUBSCRIPTION", "ticket-events-learn")
 FAIL_RATE = float(os.getenv("FAIL_RATE", "0"))

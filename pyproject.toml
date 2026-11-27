@@ -13,6 +13,7 @@ dependencies = [
     "google-cloud-pubsub>=2.44.0",
     "google-cloud-run>=0.16.3",
     "google-cloud-storage>=3.17.1",
+    "google-genai>=3.6.1",
     "pydantic-settings>=2.16.3",
     "pypdf>=7.1.1",
     "python-dotenv>=1.2.4",

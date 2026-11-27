@@ -46,3 +46,10 @@ resource "google_service_account_iam_member" "build_acts_as_worker" {
   role               = "roles/iam.serviceAccountUser"
   member             = google_service_account.build.member
 }
+
+# Worker calls Gemini on Vertex AI
+resource "google_project_iam_member" "worker_vertex" {
+  project = var.project_id
+  role    = "roles/aiplatform.user"
+  member  = google_service_account.worker.member
+}

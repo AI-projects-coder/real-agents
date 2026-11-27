@@ -9,7 +9,7 @@ resource "google_project_service" "apis" {
     "firestore.googleapis.com",
     "eventarc.googleapis.com",
     "cloudscheduler.googleapis.com",
-
+    "aiplatform.googleapis.com",
 
   ])
   service            = each.value

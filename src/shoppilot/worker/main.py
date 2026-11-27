@@ -96,15 +96,16 @@ def handle_push(envelope: PushEnvelope, request: Request):
         raise HTTPException(status_code=503, detail="simulated failure")
 
     # 4. Work + atomic save.
-    category, priority = classify(ticket)
-    doc = {**ticket, "category": category, "priority": priority, "status": "classified"}
+    result = classify(ticket)
+    doc = {**ticket, **result, "status": "classified"}
     created = save_once(db.transaction(), db, event_id, doc)
 
     log(
         "INFO", "ticket processed" if created else "duplicate skipped (race)",
-        ticket_id=ticket["ticket_id"], category=category, priority=priority, attempt=attempt,
+        ticket_id=ticket["ticket_id"], attempt=attempt, **result,
     )
-    return {"status": "ok" if created else "duplicate"}  # 200 -> ack
+    return {"status": "ok" if created else "duplicate"}
+
 
 @app.post("/events/upload")
 def on_upload(event: dict, request: Request, ce_id: str | None = Header(default=None)):

@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     api_key: str = ""  # NO default on purpose: if the secret is missing, crash at startup (fail fast)
     env: str = "local"
     policies_bucket: str = ""
+    llm_model: str = "gemini-3.8-flash"
+    llm_location: str = "global"  # newer Gemini models are served from the global endpoint
+    embedding_model: str = "gemini-embedding-2"
+
 
     @property
     def bucket(self) -> str:
