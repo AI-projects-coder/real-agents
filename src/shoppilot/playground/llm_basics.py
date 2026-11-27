@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 
 from shoppilot.config import get_settings
 from shoppilot.llm import client
+from shoppilot.llm import client, embed as embed_texts
+
 
 S = get_settings()
 
@@ -112,7 +114,7 @@ def embed():
         contents=texts,
         config=types.EmbedContentConfig(output_dimensionality=768, task_type="SEMANTIC_SIMILARITY"),
     )
-    vecs = [e.values for e in r.embeddings]
+    vecs = embed_texts(texts)
     print(f"each text -> vector of {len(vecs[0])} numbers, e.g. {[round(x, 3) for x in vecs[0][:5]]} ...\n")
 
     def cosine(a, b):
